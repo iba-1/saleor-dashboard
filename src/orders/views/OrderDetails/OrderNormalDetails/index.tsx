@@ -1,13 +1,19 @@
 import { useUser } from "@saleor/auth";
 import { WindowTitle } from "@saleor/components/WindowTitle";
+import { useCustomerAddressesQuery } from "@saleor/customers/queries";
 import useNavigator from "@saleor/hooks/useNavigator";
 import OrderCannotCancelOrderDialog from "@saleor/orders/components/OrderCannotCancelOrderDialog";
+import { OrderCustomerAddressesEditDialogOutput } from "@saleor/orders/components/OrderCustomerAddressesEditDialog/types";
 import OrderFulfillmentApproveDialog from "@saleor/orders/components/OrderFulfillmentApproveDialog";
 import OrderInvoiceEmailSendDialog from "@saleor/orders/components/OrderInvoiceEmailSendDialog";
 import {
   OrderFulfillmentApprove,
   OrderFulfillmentApproveVariables
 } from "@saleor/orders/types/OrderFulfillmentApprove";
+import {
+  OrderUpdate,
+  OrderUpdateVariables
+} from "@saleor/orders/types/OrderUpdate";
 import { PartialMutationProviderOutput } from "@saleor/types";
 import { mapEdgesToItems } from "@saleor/utils/maps";
 import { useWarehouseList } from "@saleor/warehouses/queries";
@@ -18,6 +24,7 @@ import { customerUrl } from "../../../../customers/urls";
 import { getMutationState, getStringOrPlaceholder } from "../../../../misc";
 import { productUrl } from "../../../../products/urls";
 import { FulfillmentStatus } from "../../../../types/globalTypes";
+import OrderAddressFields from "../../../components/OrderAddressFields/OrderAddressFields";
 import OrderCancelDialog from "../../../components/OrderCancelDialog";
 import OrderDetailsPage from "../../../components/OrderDetailsPage";
 import OrderFulfillmentCancelDialog from "../../../components/OrderFulfillmentCancelDialog";
@@ -33,6 +40,7 @@ import {
   orderUrl,
   OrderUrlQueryParams
 } from "../../../urls";
+import { isAnyAddressEditModalOpen } from "../OrderDraftDetails";
 
 interface OrderNormalDetailsProps {
   id: string;
@@ -41,6 +49,7 @@ interface OrderNormalDetailsProps {
   orderAddNote: any;
   orderInvoiceRequest: any;
   handleSubmit: any;
+  orderUpdate: PartialMutationProviderOutput<OrderUpdate, OrderUpdateVariables>;
   orderCancel: any;
   orderPaymentMarkAsPaid: any;
   orderVoid: any;
@@ -65,6 +74,7 @@ export const OrderNormalDetails: React.FC<OrderNormalDetailsProps> = ({
   orderAddNote,
   orderInvoiceRequest,
   handleSubmit,
+  orderUpdate,
   orderCancel,
   orderPaymentMarkAsPaid,
   orderVoid,
@@ -89,6 +99,24 @@ export const OrderNormalDetails: React.FC<OrderNormalDetailsProps> = ({
       first: 30
     }
   });
+
+  const {
+    data: customerAddresses,
+    loading: customerAddressesLoading
+  } = useCustomerAddressesQuery({
+    variables: {
+      id: order?.user?.id
+    },
+    skip: !order?.user?.id || !isAnyAddressEditModalOpen(params.action)
+  });
+  const handleCustomerChangeAddresses = async (
+    data: Partial<OrderCustomerAddressesEditDialogOutput>
+  ): Promise<any> =>
+    orderUpdate.mutate({
+      id,
+      input: data
+    });
+
   const intl = useIntl();
   const [transactionReference, setTransactionReference] = React.useState("");
 
@@ -300,6 +328,19 @@ export const OrderNormalDetails: React.FC<OrderNormalDetailsProps> = ({
         invoice={order?.invoices?.find(invoice => invoice.id === params.id)}
         onClose={closeModal}
         onSend={() => orderInvoiceSend.mutate({ id: params.id })}
+      />
+      <OrderAddressFields
+        action={params?.action}
+        orderShippingAddress={order?.shippingAddress}
+        orderBillingAddress={order?.billingAddress}
+        customerAddressesLoading={customerAddressesLoading}
+        isDraft={false}
+        countries={data?.shop?.countries}
+        customer={customerAddresses?.user}
+        onClose={closeModal}
+        onConfirm={handleCustomerChangeAddresses}
+        confirmButtonState={orderUpdate.opts.status}
+        errors={orderUpdate.opts.data?.orderUpdate.errors}
       />
     </>
   );
